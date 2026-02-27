@@ -95,12 +95,12 @@ export class GenerationService {
     const prompt = this.buildPrompt(data);
 
     const completion = await this.openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: "gpt-4o",
       messages: [
         {
           role: 'system',
           content: `You are an expert SaaS architect. Generate a structured architecture blueprint in valid JSON format.
-          
+
 The JSON must follow this exact schema:
 {
   "project_summary": string,
@@ -119,7 +119,7 @@ Return ONLY valid JSON, no markdown, no explanations.`,
         },
       ],
       temperature: 0.7,
-      max_tokens: 4000,
+      max_tokens: 1500,
     });
 
     const content = completion.choices[0]?.message?.content;
@@ -150,7 +150,7 @@ Return ONLY valid JSON, no markdown, no explanations.`,
 
     // Use single model - gemini-2.0-flash (most reliable)
     const response = await this.gemini.models.generateContent({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-2.5-flash-lite',
       contents: prompt,
     });
     
