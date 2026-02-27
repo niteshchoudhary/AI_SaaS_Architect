@@ -1,6 +1,60 @@
-import Link from "next/link";
+'use client';
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+
+const TECH_STACKS = ['Next.js', 'NestJS', 'Rails', 'PostgreSQL', 'MySQL', 'Prisma'];
+const MONETIZATION_OPTIONS = [
+  { value: 'subscription', label: 'Subscription' },
+  { value: 'one-time', label: 'One-time' },
+  { value: 'freemium', label: 'Freemium' },
+  { value: 'marketplace', label: 'Marketplace' },
+  { value: 'internal-tool', label: 'Internal Tool' },
+];
 
 export default function Home() {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    const formData = new FormData(e.currentTarget);
+    
+    const data = {
+      idea: formData.get('idea') as string,
+      roles: (formData.get('roles') as string).split(',').map((r: string) => r.trim()).filter(Boolean),
+      monetization: formData.get('monetization') as string,
+      tenantType: formData.get('tenantType') as string,
+      techStack: formData.getAll('techStack') as string[],
+    };
+
+    try {
+      const response = await fetch('http://localhost:4000/api/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to generate architecture');
+      }
+
+      const result = await response.json();
+      router.push(`/result/${result.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <main className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
       <div className="container mx-auto px-4 py-16">
@@ -17,7 +71,7 @@ export default function Home() {
 
         {/* Architecture Form Card */}
         <div className="max-w-4xl mx-auto bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8">
-          <form className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-6">
             {/* App Idea */}
             <div>
               <label htmlFor="idea" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -67,11 +121,11 @@ export default function Home() {
                 className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
               >
                 <option value="">Select monetization type...</option>
-                <option value="subscription">Subscription</option>
-                <option value="one-time">One-time</option>
-                <option value="freemium">Freemium</option>
-                <option value="marketplace">Marketplace</option>
-                <option value="internal-tool">Internal Tool</option>
+                {MONETIZATION_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -110,7 +164,7 @@ export default function Home() {
                 Tech Stack
               </label>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {['Next.js', 'NestJS', 'Rails', 'PostgreSQL', 'MySQL', 'Prisma'].map((tech) => (
+                {TECH_STACKS.map((tech) => (
                   <label key={tech} className="flex items-center">
                     <input
                       type="checkbox"
@@ -124,13 +178,21 @@ export default function Home() {
               </div>
             </div>
 
+            {/* Error Message */}
+            {error && (
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                <p className="text-red-600 dark:text-red-400">{error}</p>
+              </div>
+            )}
+
             {/* Submit Button */}
             <div className="pt-4">
               <button
                 type="submit"
-                className="w-full bg-primary-600 hover:bg-primary-700 text-white font-semibold py-4 px-6 rounded-lg transition-colors duration-200 text-lg"
+                disabled={loading}
+                className="w-full bg-primary-600 hover:bg-primary-700 disabled:bg-gray-400 text-white font-semibold py-4 px-6 rounded-lg transition-colors duration-200 text-lg"
               >
-                Generate Architecture
+                {loading ? 'Generating Architecture...' : 'Generate Architecture'}
               </button>
             </div>
           </form>
@@ -162,6 +224,16 @@ export default function Home() {
               Normalized database schema with proper relationships
             </p>
           </div>
+        </div>
+
+        {/* Footer Link */}
+        <div className="max-w-4xl mx-auto mt-12 text-center">
+          <a
+            href="/history"
+            className="text-primary-600 hover:text-primary-700 dark:text-primary-400"
+          >
+            View Generation History →
+          </a>
         </div>
       </div>
     </main>
