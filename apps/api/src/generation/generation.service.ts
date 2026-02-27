@@ -20,8 +20,9 @@ export class GenerationService {
     }
   }
 
-  async generateArchitecture(data: GenerateDto): Promise<{ id: string; data: GenerationResult }> {
+  async generateArchitecture(data: GenerateDto): Promise<{ id: string; data: GenerationResult; isMock: boolean }> {
     let aiResponse: GenerationResult;
+    let isMock = false;
 
     // Always try to use mock response if:
     // 1. No API key provided
@@ -29,12 +30,14 @@ export class GenerationService {
     // 3. API call fails for any reason
     if (this.useMock) {
       aiResponse = this.getMockResponse(data);
+      isMock = true;
     } else {
       try {
         aiResponse = await this.callOpenAI(data);
       } catch (error) {
         console.warn('OpenAI API failed, falling back to mock response:', error instanceof Error ? error.message : error);
         aiResponse = this.getMockResponse(data);
+        isMock = true;
       }
     }
 
@@ -48,11 +51,11 @@ export class GenerationService {
         monetization_type: data.monetization,
         tenant_type: data.tenantType,
         tech_stack: JSON.stringify(data.techStack),
-        ai_response: JSON.stringify(aiResponse),
+        ai_response: JSON.stringify({ ...aiResponse, _isMock: isMock }),
       },
     });
 
-    return { id: generation.id, data: aiResponse };
+    return { id: generation.id, data: aiResponse, isMock };
   }
 
   private async callOpenAI(data: GenerateDto): Promise<GenerationResult> {

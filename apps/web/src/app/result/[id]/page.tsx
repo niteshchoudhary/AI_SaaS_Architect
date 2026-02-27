@@ -68,6 +68,27 @@ export default function ResultPage() {
             Architecture Blueprint
           </h1>
 
+          {/* Mock/API Indicator */}
+          {'_isMock' in data && (
+            <div className={`mb-6 p-4 rounded-lg border ${
+              data._isMock 
+                ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800' 
+                : 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+            }`}>
+              <p className={`text-sm font-medium ${
+                data._isMock 
+                  ? 'text-red-600 dark:text-red-400' 
+                  : 'text-green-600 dark:text-green-400'
+              }`}>
+                {data._isMock ? (
+                  <>⚠️ <strong>Mock Response:</strong> This architecture was generated using mock data. Add a valid OpenAI API key to get AI-powered results.</>
+                ) : (
+                  <>✅ <strong>AI Generated:</strong> This architecture was generated using OpenAI API.</>
+                )}
+              </p>
+            </div>
+          )}
+
           <div className="space-y-8">
             {/* Project Summary */}
             <section className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
