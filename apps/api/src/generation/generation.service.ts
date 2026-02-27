@@ -23,7 +23,7 @@ export class GenerationService {
   async generateArchitecture(data: GenerateDto): Promise<{ id: string; data: GenerationResult }> {
     let aiResponse: GenerationResult;
 
-    if (true) {
+    if (this.useMock) {
       aiResponse = this.getMockResponse(data);
     } else {
       aiResponse = await this.callOpenAI(data);
