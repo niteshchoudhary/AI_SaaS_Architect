@@ -39,7 +39,7 @@ export class GenerationController {
       if (!generation) {
         throw new NotFoundException('Generation not found');
       }
-      return generation;
+      return generation.ai_response;
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;

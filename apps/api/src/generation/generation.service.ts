@@ -9,20 +9,48 @@ import type { GenerationResult, Generation } from 'ai-saas-types';
 @Injectable()
 export class GenerationService {
   private openai: OpenAI;
+  private useMock: boolean;
 
   constructor(private configService: ConfigService) {
     const apiKey = this.configService.get<string>('OPENAI_API_KEY');
-    if (!apiKey) {
-      throw new Error('OPENAI_API_KEY is not configured');
+    this.useMock = !apiKey || apiKey === 'your_openai_api_key_here';
+    
+    if (!this.useMock) {
+      this.openai = new OpenAI({ apiKey });
     }
-    this.openai = new OpenAI({ apiKey });
   }
 
   async generateArchitecture(data: GenerateDto): Promise<{ id: string; data: GenerationResult }> {
+    let aiResponse: GenerationResult;
+
+    if (true) {
+      aiResponse = this.getMockResponse(data);
+    } else {
+      aiResponse = await this.callOpenAI(data);
+    }
+
+    // Save to database
+    const id = uuidv4();
+    const generation: Generation = await prisma.generations.create({
+      data: {
+        id,
+        idea: data.idea,
+        roles_input: data.roles.join(', '),
+        monetization_type: data.monetization,
+        tenant_type: data.tenantType,
+        tech_stack: JSON.stringify(data.techStack),
+        ai_response: JSON.stringify(aiResponse),
+      },
+    });
+
+    return { id: generation.id, data: aiResponse };
+  }
+
+  private async callOpenAI(data: GenerateDto): Promise<GenerationResult> {
     const prompt = this.buildPrompt(data);
 
     const completion = await this.openai.chat.completions.create({
-      model: 'gpt-4-turbo-preview',
+      model: 'gpt-3.5-turbo',
       messages: [
         {
           role: 'system',
@@ -65,21 +93,89 @@ Return ONLY valid JSON, no markdown, no explanations.`,
       throw new BadRequestException('Invalid JSON response from AI');
     }
 
-    // Save to database
-    const id = uuidv4();
-    const generation: Generation = await prisma.generations.create({
-      data: {
-        id,
-        idea: data.idea,
-        roles_input: data.roles.join(', '),
-        monetization_type: data.monetization,
-        tenant_type: data.tenantType,
-        tech_stack: JSON.stringify(data.techStack),
-        ai_response: JSON.stringify(aiResponse),
-      },
-    });
+    return aiResponse;
+  }
 
-    return { id: generation.id, data: aiResponse };
+  private getMockResponse(data: GenerateDto): GenerationResult {
+    return {
+      project_summary: `A ${data.monetization} ${data.tenantType === 'single' ? 'single-tenant' : 'multi-tenant'} SaaS application built with ${data.techStack.join(', ') || 'modern technologies'}. ${data.idea}`,
+      mvp_features: [
+        'User authentication and authorization',
+        'Core feature based on your idea',
+        'Dashboard for users',
+        'Basic CRUD operations',
+        'Responsive UI design',
+      ],
+      future_features: [
+        'Advanced analytics and reporting',
+        'Third-party integrations',
+        'Mobile application',
+        'API for external developers',
+        'Advanced customization options',
+      ],
+      roles: data.roles.map((role) => ({
+        name: role,
+        description: `${role} role with appropriate permissions`,
+        permissions: role.toLowerCase().includes('admin') 
+          ? ['create', 'read', 'update', 'delete', 'manage_users']
+          : ['read', 'update'],
+      })),
+      database_schema: [
+        {
+          table_name: 'users',
+          columns: [
+            { name: 'id', type: 'UUID PRIMARY KEY', description: 'Unique user identifier' },
+            { name: 'email', type: 'VARCHAR(255) UNIQUE', description: 'User email address' },
+            { name: 'password_hash', type: 'VARCHAR(255)', description: 'Hashed password' },
+            { name: 'role', type: 'VARCHAR(50)', description: 'User role' },
+            { name: 'created_at', type: 'TIMESTAMP', description: 'Account creation date' },
+          ],
+        },
+        {
+          table_name: 'tenants',
+          columns: [
+            { name: 'id', type: 'UUID PRIMARY KEY', description: 'Unique tenant identifier' },
+            { name: 'name', type: 'VARCHAR(255)', description: 'Tenant name' },
+            { name: 'subdomain', type: 'VARCHAR(100) UNIQUE', description: 'Tenant subdomain' },
+            { name: 'created_at', type: 'TIMESTAMP', description: 'Creation date' },
+          ],
+        },
+        {
+          table_name: 'subscriptions',
+          columns: [
+            { name: 'id', type: 'UUID PRIMARY KEY', description: 'Unique subscription identifier' },
+            { name: 'tenant_id', type: 'UUID', description: 'Reference to tenant' },
+            { name: 'plan', type: 'VARCHAR(50)', description: 'Subscription plan' },
+            { name: 'status', type: 'VARCHAR(20)', description: 'Subscription status' },
+            { name: 'created_at', type: 'TIMESTAMP', description: 'Subscription start date' },
+          ],
+        },
+      ],
+      folder_structure: {
+        frontend: [
+          'src/',
+          '├── app/',
+          '│   ├── (auth)/',
+          '│   ├── (dashboard)/',
+          '│   ├── api/',
+          '│   ├── layout.tsx',
+          '│   └── page.tsx',
+          '├── components/',
+          '├── lib/',
+          '└── styles/',
+        ],
+        backend: [
+          'src/',
+          '├── auth/',
+          '├── users/',
+          '├── tenants/',
+          '├── subscriptions/',
+          '├── common/',
+          '├── app.module.ts',
+          '└── main.ts',
+        ],
+      },
+    };
   }
 
   private buildPrompt(data: GenerateDto): string {
