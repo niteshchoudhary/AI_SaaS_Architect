@@ -73,17 +73,23 @@ export default function ResultPage() {
             <div className={`mb-6 p-4 rounded-lg border ${
               data._isMock 
                 ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800' 
-                : 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+                : data._source === 'gemini'
+                  ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
+                  : 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
             }`}>
               <p className={`text-sm font-medium ${
                 data._isMock 
                   ? 'text-red-600 dark:text-red-400' 
-                  : 'text-green-600 dark:text-green-400'
+                  : data._source === 'gemini'
+                    ? 'text-blue-600 dark:text-blue-400'
+                    : 'text-green-600 dark:text-green-400'
               }`}>
                 {data._isMock ? (
-                  <>⚠️ <strong>Mock Response:</strong> This architecture was generated using mock data. Add a valid OpenAI API key to get AI-powered results.</>
+                  <>⚠️ <strong>Mock Response:</strong> This architecture was generated using mock data. Add a valid OpenAI or Gemini API key to get AI-powered results.</>
+                ) : data._source === 'gemini' ? (
+                  <>🔷 <strong>Gemini AI:</strong> This architecture was generated using Google Gemini API.</>
                 ) : (
-                  <>✅ <strong>AI Generated:</strong> This architecture was generated using OpenAI API.</>
+                  <>✅ <strong>OpenAI:</strong> This architecture was generated using OpenAI API.</>
                 )}
               </p>
             </div>

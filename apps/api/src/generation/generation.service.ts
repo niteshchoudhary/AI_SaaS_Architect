@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
+import { GoogleGenAI } from '@google/genai';
 import { v4 as uuidv4 } from 'uuid';
 import { prisma } from 'ai-saas-database';
 import type { GenerateDto } from './dto/generate.dto';
@@ -9,36 +10,53 @@ import type { GenerationResult, Generation } from 'ai-saas-types';
 @Injectable()
 export class GenerationService {
   private openai: OpenAI | null = null;
+  private gemini: GoogleGenAI | null = null;
   private useMock: boolean;
 
   constructor(private configService: ConfigService) {
     const apiKey = this.configService.get<string>('OPENAI_API_KEY');
+    const geminiKey = this.configService.get<string>('GEMINI_API_KEY');
+    
     this.useMock = !apiKey || apiKey === 'your_openai_api_key_here';
     
     if (!this.useMock && apiKey) {
       this.openai = new OpenAI({ apiKey });
     }
+    
+    if (geminiKey && geminiKey !== 'your_gemini_api_key_here') {
+      this.gemini = new GoogleGenAI({ apiKey: geminiKey });
+    }
   }
 
   async generateArchitecture(data: GenerateDto): Promise<{ id: string; data: GenerationResult; isMock: boolean }> {
-    let aiResponse: GenerationResult;
+    let aiResponse: GenerationResult | undefined;
     let isMock = false;
+    let source = 'mock';
 
-    // Always try to use mock response if:
-    // 1. No API key provided
-    // 2. API key is placeholder
-    // 3. API call fails for any reason
-    if (this.useMock) {
-      aiResponse = this.getMockResponse(data);
-      isMock = true;
-    } else {
+    // Try OpenAI first
+    if (!this.useMock && this.openai) {
       try {
         aiResponse = await this.callOpenAI(data);
+        source = 'openai';
       } catch (error) {
-        console.warn('OpenAI API failed, falling back to mock response:', error instanceof Error ? error.message : error);
-        aiResponse = this.getMockResponse(data);
-        isMock = true;
+        console.warn('OpenAI API failed, trying Gemini:', error instanceof Error ? error.message : error);
       }
+    }
+
+    // Try Gemini if OpenAI failed or not available
+    if (!aiResponse && this.gemini) {
+      try {
+        aiResponse = await this.callGemini(data);
+        source = 'gemini';
+      } catch (error) {
+        console.warn('Gemini API failed, falling back to mock:', error instanceof Error ? error.message : error);
+      }
+    }
+
+    // Fall back to mock if both APIs failed
+    if (!aiResponse) {
+      aiResponse = this.getMockResponse(data);
+      isMock = true;
     }
 
     // Save to database
@@ -51,7 +69,7 @@ export class GenerationService {
         monetization_type: data.monetization,
         tenant_type: data.tenantType,
         tech_stack: JSON.stringify(data.techStack),
-        ai_response: JSON.stringify({ ...aiResponse, _isMock: isMock }),
+        ai_response: JSON.stringify({ ...aiResponse, _isMock: isMock, _source: source }),
       },
     });
 
@@ -107,6 +125,52 @@ Return ONLY valid JSON, no markdown, no explanations.`,
       this.validateAIResponse(aiResponse);
     } catch (error) {
       throw new BadRequestException('Invalid JSON response from AI');
+    }
+
+    return aiResponse;
+  }
+
+  private async callGemini(data: GenerateDto): Promise<GenerationResult> {
+    if (!this.gemini) {
+      throw new Error('Gemini client not initialized');
+    }
+
+    const prompt = this.buildPrompt(data) + '\n\nReturn ONLY valid JSON in this exact schema:\n{"project_summary": string, "mvp_features": string[], "future_features": string[], "roles": [{"name": string, "description": string, "permissions": string[]}], "database_schema": [{"table_name": string, "columns": [{"name": string, "type": string, "description": string}]}], "folder_structure": {"frontend": string[], "backend": string[]}}';
+
+    // Try gemini-2.0-flash first, then gemini-2.0-flash-lite, then gemini-1.5-pro
+    const modelNames = ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-pro'];
+    let content: string | undefined;
+
+    for (const modelName of modelNames) {
+      try {
+        const response = await this.gemini.models.generateContent({
+          model: modelName,
+          contents: prompt,
+        });
+        content = response.text;
+        if (content) {
+          console.log(`Gemini using model: ${modelName}`);
+          break;
+        }
+      } catch (error) {
+        console.warn(`Gemini model ${modelName} failed:`, error instanceof Error ? error.message : error);
+        continue;
+      }
+    }
+
+    if (!content) {
+      throw new BadRequestException('Failed to get response from Gemini');
+    }
+
+    // Parse and validate JSON
+    let aiResponse: GenerationResult;
+    try {
+      // Remove markdown code blocks if present
+      const cleanContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      aiResponse = JSON.parse(cleanContent);
+      this.validateAIResponse(aiResponse);
+    } catch (error) {
+      throw new BadRequestException('Invalid JSON response from Gemini');
     }
 
     return aiResponse;
