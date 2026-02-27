@@ -175,14 +175,128 @@ Return ONLY valid JSON, no markdown, no explanations.`,
   }
 
   private getMockResponse(data: GenerateDto): GenerationResult {
+    const monetizationFeatures: Record<string, string[]> = {
+      'subscription': [
+        'Subscription plans (Basic, Pro, Enterprise)',
+        'Recurring billing integration (Stripe/Paddle)',
+        'Payment webhook handling',
+        'Subscription management dashboard',
+      ],
+      'one-time': [
+        'One-time payment checkout',
+        'License key generation',
+        'Download/access management',
+        'Refund handling system',
+      ],
+      'freemium': [
+        'Free tier with limited features',
+        'Upgrade to paid plans',
+        'Feature gating system',
+        'Usage tracking and limits',
+      ],
+      'marketplace': [
+        'Vendor/seller onboarding',
+        'Escrow payment system',
+        'Commission calculation',
+        'Dispute resolution system',
+      ],
+      'internal-tool': [
+        'SSO/Enterprise authentication',
+        'Audit logging',
+        'Admin dashboard',
+        'Role-based access control',
+      ],
+    };
+
+    const paymentTables: Record<string, Array<{ table_name: string; columns: Array<{ name: string; type: string; description: string }> }>> = {
+      'subscription': [
+        {
+          table_name: 'subscriptions',
+          columns: [
+            { name: 'id', type: 'UUID PRIMARY KEY', description: 'Unique subscription identifier' },
+            { name: 'user_id', type: 'UUID', description: 'Reference to user' },
+            { name: 'plan_id', type: 'UUID', description: 'Reference to subscription plan' },
+            { name: 'status', type: 'VARCHAR(20)', description: 'active, cancelled, past_due' },
+            { name: 'current_period_end', type: 'TIMESTAMP', description: 'Current billing period end' },
+            { name: 'created_at', type: 'TIMESTAMP', description: 'Subscription start date' },
+          ],
+        },
+        {
+          table_name: 'subscription_plans',
+          columns: [
+            { name: 'id', type: 'UUID PRIMARY KEY', description: 'Unique plan identifier' },
+            { name: 'name', type: 'VARCHAR(50)', description: 'Plan name (Basic, Pro, etc.)' },
+            { name: 'price', type: 'DECIMAL(10,2)', description: 'Monthly price' },
+            { name: 'features', type: 'JSONB', description: 'Plan features' },
+          ],
+        },
+      ],
+      'one-time': [
+        {
+          table_name: 'orders',
+          columns: [
+            { name: 'id', type: 'UUID PRIMARY KEY', description: 'Unique order identifier' },
+            { name: 'user_id', type: 'UUID', description: 'Reference to user' },
+            { name: 'total_amount', type: 'DECIMAL(10,2)', description: 'Order total' },
+            { name: 'status', type: 'VARCHAR(20)', description: 'pending, completed, refunded' },
+            { name: 'created_at', type: 'TIMESTAMP', description: 'Order date' },
+          ],
+        },
+        {
+          table_name: 'license_keys',
+          columns: [
+            { name: 'id', type: 'UUID PRIMARY KEY', description: 'Unique license identifier' },
+            { name: 'key', type: 'VARCHAR(255) UNIQUE', description: 'License key hash' },
+            { name: 'user_id', type: 'UUID', description: 'Reference to user' },
+            { name: 'is_active', type: 'BOOLEAN', description: 'License status' },
+          ],
+        },
+      ],
+      'freemium': [
+        {
+          table_name: 'usage_limits',
+          columns: [
+            { name: 'id', type: 'UUID PRIMARY KEY', description: 'Unique identifier' },
+            { name: 'user_id', type: 'UUID', description: 'Reference to user' },
+            { name: 'feature', type: 'VARCHAR(50)', description: 'Feature name' },
+            { name: 'limit', type: 'INTEGER', description: 'Usage limit' },
+            { name: 'current_usage', type: 'INTEGER', description: 'Current usage count' },
+          ],
+        },
+      ],
+      'marketplace': [
+        {
+          table_name: 'vendors',
+          columns: [
+            { name: 'id', type: 'UUID PRIMARY KEY', description: 'Unique vendor identifier' },
+            { name: 'user_id', type: 'UUID', description: 'Reference to user' },
+            { name: 'status', type: 'VARCHAR(20)', description: 'pending, approved, rejected' },
+            { name: 'commission_rate', type: 'DECIMAL(5,2)', description: 'Commission percentage' },
+          ],
+        },
+        {
+          table_name: 'transactions',
+          columns: [
+            { name: 'id', type: 'UUID PRIMARY KEY', description: 'Unique transaction identifier' },
+            { name: 'buyer_id', type: 'UUID', description: 'Reference to buyer' },
+            { name: 'vendor_id', type: 'UUID', description: 'Reference to vendor' },
+            { name: 'amount', type: 'DECIMAL(10,2)', description: 'Transaction amount' },
+            { name: 'commission', type: 'DECIMAL(10,2)', description: 'Platform commission' },
+          ],
+        },
+      ],
+      'internal-tool': [],
+    };
+
     return {
-      project_summary: `A ${data.monetization} ${data.tenantType === 'single' ? 'single-tenant' : 'multi-tenant'} SaaS application built with ${data.techStack.join(', ') || 'modern technologies'}. ${data.idea}`,
+      project_summary: `A ${data.monetization === 'internal-tool' ? '' : data.monetization + ' '}SaaS application built with ${data.techStack.join(', ') || 'modern technologies'}. ${data.idea}`,
       mvp_features: [
         'User authentication and authorization',
         'Core feature based on your idea',
         'Dashboard for users',
         'Basic CRUD operations',
         'Responsive UI design',
+        ...(monetizationFeatures[data.monetization] || []),
       ],
       future_features: [
         'Advanced analytics and reporting',
@@ -194,7 +308,7 @@ Return ONLY valid JSON, no markdown, no explanations.`,
       roles: data.roles.map((role) => ({
         name: role,
         description: `${role} role with appropriate permissions`,
-        permissions: role.toLowerCase().includes('admin') 
+        permissions: role.toLowerCase().includes('admin')
           ? ['create', 'read', 'update', 'delete', 'manage_users']
           : ['read', 'update'],
       })),
@@ -209,7 +323,7 @@ Return ONLY valid JSON, no markdown, no explanations.`,
             { name: 'created_at', type: 'TIMESTAMP', description: 'Account creation date' },
           ],
         },
-        {
+        ...(data.monetization === 'multi' || data.tenantType === 'multi' ? [{
           table_name: 'tenants',
           columns: [
             { name: 'id', type: 'UUID PRIMARY KEY', description: 'Unique tenant identifier' },
@@ -217,17 +331,8 @@ Return ONLY valid JSON, no markdown, no explanations.`,
             { name: 'subdomain', type: 'VARCHAR(100) UNIQUE', description: 'Tenant subdomain' },
             { name: 'created_at', type: 'TIMESTAMP', description: 'Creation date' },
           ],
-        },
-        {
-          table_name: 'subscriptions',
-          columns: [
-            { name: 'id', type: 'UUID PRIMARY KEY', description: 'Unique subscription identifier' },
-            { name: 'tenant_id', type: 'UUID', description: 'Reference to tenant' },
-            { name: 'plan', type: 'VARCHAR(50)', description: 'Subscription plan' },
-            { name: 'status', type: 'VARCHAR(20)', description: 'Subscription status' },
-            { name: 'created_at', type: 'TIMESTAMP', description: 'Subscription start date' },
-          ],
-        },
+        }] : []),
+        ...(paymentTables[data.monetization] || []),
       ],
       folder_structure: {
         frontend: [
@@ -246,8 +351,7 @@ Return ONLY valid JSON, no markdown, no explanations.`,
           'src/',
           '├── auth/',
           '├── users/',
-          '├── tenants/',
-          '├── subscriptions/',
+          data.monetization === 'subscription' ? '├── subscriptions/' : data.monetization === 'marketplace' ? '├── marketplace/' : '├── billing/',
           '├── common/',
           '├── app.module.ts',
           '└── main.ts',
@@ -257,6 +361,14 @@ Return ONLY valid JSON, no markdown, no explanations.`,
   }
 
   private buildPrompt(data: GenerateDto): string {
+    const monetizationLabels: Record<string, string> = {
+      'subscription': 'Subscription-based (recurring monthly/yearly payments)',
+      'one-time': 'One-time payment (lifetime access)',
+      'freemium': 'Freemium (free tier with paid upgrades)',
+      'marketplace': 'Marketplace (transaction fees or commissions)',
+      'internal-tool': 'Internal Tool (no monetization, for internal use)',
+    };
+
     return `
 Create a SaaS architecture blueprint for the following:
 
@@ -267,7 +379,7 @@ ${data.idea}
 ${data.roles.join(', ')}
 
 **Monetization Type:**
-${data.monetization}
+${monetizationLabels[data.monetization] || data.monetization}
 
 **Tenant Type:**
 ${data.tenantType === 'single' ? 'Single Tenant' : 'Multi-Tenant'}
@@ -276,11 +388,11 @@ ${data.tenantType === 'single' ? 'Single Tenant' : 'Multi-Tenant'}
 ${data.techStack.join(', ') || 'Not specified'}
 
 Generate a comprehensive architecture including:
-1. Project summary
-2. MVP features (prioritized list)
+1. Project summary (mention the monetization model)
+2. MVP features (prioritized list, include payment/subscription features if applicable)
 3. Future features (for later iterations)
 4. Role & permission matrix for each role
-5. Database schema with tables and columns
+5. Database schema with tables and columns (include payment/subscription tables if monetization requires)
 6. Suggested folder structure for frontend and backend
 `;
   }
