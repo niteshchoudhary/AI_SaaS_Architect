@@ -42,16 +42,22 @@ export class GenerationService {
         const errorMessage = error instanceof Error ? error.message : String(error);
         const isRateLimit = errorMessage.includes('429') || errorMessage.includes('rate limit');
         if (isRateLimit) {
-          console.warn('OpenAI rate limit exceeded, falling back to mock');
+          console.warn('OpenAI rate limit exceeded, trying Gemini...');
         } else {
           console.warn('OpenAI API failed, trying Gemini:', errorMessage);
-          // Try Gemini if OpenAI failed (but not rate limit)
-          if (this.gemini) {
-            try {
-              aiResponse = await this.callGemini(data);
-              source = 'gemini';
-            } catch (geminiError) {
-              console.warn('Gemini API failed, falling back to mock:', geminiError instanceof Error ? geminiError.message : geminiError);
+        }
+        // Always try Gemini if OpenAI failed
+        if (this.gemini) {
+          try {
+            aiResponse = await this.callGemini(data);
+            source = 'gemini';
+          } catch (geminiError) {
+            const geminiErrorMessage = geminiError instanceof Error ? geminiError.message : String(geminiError);
+            const isGeminiRateLimit = geminiErrorMessage.includes('429') || geminiErrorMessage.includes('rate limit');
+            if (isGeminiRateLimit) {
+              console.warn('Gemini rate limit exceeded, falling back to mock');
+            } else {
+              console.warn('Gemini API failed, falling back to mock:', geminiErrorMessage);
             }
           }
         }
