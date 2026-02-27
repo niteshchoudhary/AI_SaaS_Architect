@@ -1,11 +1,12 @@
 'use client';
 
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import type { GenerationResult } from 'ai-saas-types';
 
 export default function ResultPage() {
   const params = useParams();
+  const router = useRouter();
   const [data, setData] = useState<GenerationResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -55,6 +56,14 @@ export default function ResultPage() {
     <main className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
       <div className="container mx-auto px-4 py-16">
         <div className="max-w-6xl mx-auto">
+          {/* Back Button */}
+          <button
+            onClick={() => router.push('/')}
+            className="mb-6 flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
+          >
+            ← Back to Home
+          </button>
+
           <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-8">
             Architecture Blueprint
           </h1>

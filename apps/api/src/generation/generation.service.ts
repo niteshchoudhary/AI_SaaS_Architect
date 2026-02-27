@@ -23,10 +23,19 @@ export class GenerationService {
   async generateArchitecture(data: GenerateDto): Promise<{ id: string; data: GenerationResult }> {
     let aiResponse: GenerationResult;
 
+    // Always try to use mock response if:
+    // 1. No API key provided
+    // 2. API key is placeholder
+    // 3. API call fails for any reason
     if (this.useMock) {
       aiResponse = this.getMockResponse(data);
     } else {
-      aiResponse = await this.callOpenAI(data);
+      try {
+        aiResponse = await this.callOpenAI(data);
+      } catch (error) {
+        console.warn('OpenAI API failed, falling back to mock response:', error instanceof Error ? error.message : error);
+        aiResponse = this.getMockResponse(data);
+      }
     }
 
     // Save to database
