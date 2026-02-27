@@ -1,0 +1,23 @@
+// AI SaaS Architect Database Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Generations {
+  id                String   @id @default(uuid())
+  idea              String   @db.Text
+  roles_input       String   @db.Text
+  monetization_type String   @db.VarChar(50)
+  tenant_type       String   @db.VarChar(20)
+  tech_stack        String   @db.Text
+  ai_response       String   @db.Text
+  created_at        DateTime @default(now())
+
+  @@map("generations")
+}
