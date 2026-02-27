@@ -8,14 +8,14 @@ import type { GenerationResult, Generation } from 'ai-saas-types';
 
 @Injectable()
 export class GenerationService {
-  private openai: OpenAI;
+  private openai: OpenAI | null = null;
   private useMock: boolean;
 
   constructor(private configService: ConfigService) {
     const apiKey = this.configService.get<string>('OPENAI_API_KEY');
     this.useMock = !apiKey || apiKey === 'your_openai_api_key_here';
     
-    if (!this.useMock) {
+    if (!this.useMock && apiKey) {
       this.openai = new OpenAI({ apiKey });
     }
   }
@@ -56,6 +56,10 @@ export class GenerationService {
   }
 
   private async callOpenAI(data: GenerateDto): Promise<GenerationResult> {
+    if (!this.openai) {
+      throw new Error('OpenAI client not initialized');
+    }
+
     const prompt = this.buildPrompt(data);
 
     const completion = await this.openai.chat.completions.create({
