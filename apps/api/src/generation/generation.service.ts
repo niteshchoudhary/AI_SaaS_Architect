@@ -39,21 +39,26 @@ export class GenerationService {
         aiResponse = await this.callOpenAI(data);
         source = 'openai';
       } catch (error) {
-        console.warn('OpenAI API failed, trying Gemini:', error instanceof Error ? error.message : error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const isRateLimit = errorMessage.includes('429') || errorMessage.includes('rate limit');
+        if (isRateLimit) {
+          console.warn('OpenAI rate limit exceeded, falling back to mock');
+        } else {
+          console.warn('OpenAI API failed, trying Gemini:', errorMessage);
+          // Try Gemini if OpenAI failed (but not rate limit)
+          if (this.gemini) {
+            try {
+              aiResponse = await this.callGemini(data);
+              source = 'gemini';
+            } catch (geminiError) {
+              console.warn('Gemini API failed, falling back to mock:', geminiError instanceof Error ? geminiError.message : geminiError);
+            }
+          }
+        }
       }
     }
 
-    // Try Gemini if OpenAI failed or not available
-    if (!aiResponse && this.gemini) {
-      try {
-        aiResponse = await this.callGemini(data);
-        source = 'gemini';
-      } catch (error) {
-        console.warn('Gemini API failed, falling back to mock:', error instanceof Error ? error.message : error);
-      }
-    }
-
-    // Fall back to mock if both APIs failed
+    // Fall back to mock if both APIs failed or not available
     if (!aiResponse) {
       aiResponse = this.getMockResponse(data);
       isMock = true;
@@ -137,26 +142,13 @@ Return ONLY valid JSON, no markdown, no explanations.`,
 
     const prompt = this.buildPrompt(data) + '\n\nReturn ONLY valid JSON in this exact schema:\n{"project_summary": string, "mvp_features": string[], "future_features": string[], "roles": [{"name": string, "description": string, "permissions": string[]}], "database_schema": [{"table_name": string, "columns": [{"name": string, "type": string, "description": string}]}], "folder_structure": {"frontend": string[], "backend": string[]}}';
 
-    // Try gemini-2.0-flash first, then gemini-2.0-flash-lite, then gemini-1.5-pro
-    const modelNames = ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-pro'];
-    let content: string | undefined;
-
-    for (const modelName of modelNames) {
-      try {
-        const response = await this.gemini.models.generateContent({
-          model: modelName,
-          contents: prompt,
-        });
-        content = response.text;
-        if (content) {
-          console.log(`Gemini using model: ${modelName}`);
-          break;
-        }
-      } catch (error) {
-        console.warn(`Gemini model ${modelName} failed:`, error instanceof Error ? error.message : error);
-        continue;
-      }
-    }
+    // Use single model - gemini-2.0-flash (most reliable)
+    const response = await this.gemini.models.generateContent({
+      model: 'gemini-2.0-flash',
+      contents: prompt,
+    });
+    
+    const content = response.text;
 
     if (!content) {
       throw new BadRequestException('Failed to get response from Gemini');
